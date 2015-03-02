@@ -14,7 +14,7 @@
 
 @interface MIKMIDISequenceView : NSView
 
-@property (nonatomic, weak) IBOutlet id<MIKMIDISequenceViewDelegate> delegate;
+@property (nonatomic, weak) IBOutlet id <MIKMIDISequenceViewDelegate> delegate;
 @property (nonatomic, strong) MIKMIDISequence *sequence;
 
 @end
