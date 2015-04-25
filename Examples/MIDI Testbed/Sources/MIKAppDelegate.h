@@ -7,12 +7,15 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import <AudioToolbox/AudioToolbox.h>
 
 @class MIKMIDIDeviceManager;
 @class MIKMIDIDevice;
 @class MIKMIDISourceEndpoint;
 
-@interface MIKAppDelegate : NSObject <NSApplicationDelegate>
+@interface MIKAppDelegate : NSObject <NSApplicationDelegate>{
+    CAClockRef mtcClockRef;
+}
 
 - (IBAction)sendSysex:(id)sender;
 

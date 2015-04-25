@@ -11,6 +11,8 @@
 #import <mach/mach.h>
 #import <mach/mach_time.h>
 
+
+
 @interface MIKAppDelegate ()
 
 @property (nonatomic, strong) MIKMIDIDeviceManager *midiDeviceManager;
@@ -35,7 +37,87 @@
 	[self.midiDeviceManager addObserver:self forKeyPath:@"availableDevices" options:NSKeyValueObservingOptionInitial context:NULL];
 	[self.midiDeviceManager addObserver:self forKeyPath:@"virtualSources" options:NSKeyValueObservingOptionInitial context:NULL];
 	[self.midiDeviceManager addObserver:self forKeyPath:@"virtualDestinations" options:NSKeyValueObservingOptionInitial context:NULL];
+    
+    
+    [self createClock];
+    [self playMusic];
 }
+
+
+-(void)createClock{
+    
+    OSStatus err = CAClockNew(0, &mtcClockRef);
+ 
+    if (err != noErr) {
+        NSLog(@"\t\terror %d at CAClockNew()", (int)err);
+    }
+    else {
+        CAClockTimebase timebase = kCAClockTimebase_HostTime;
+        UInt32 size = 0;
+        size = sizeof(timebase);
+        err = CAClockSetProperty(mtcClockRef, kCAClockProperty_InternalTimebase, size, &timebase);
+        if (err)
+            NSLog(@"Error setting clock timebase");
+        
+        UInt32 tSyncMode = kCAClockSyncMode_Internal;
+        size = sizeof(tSyncMode);
+        err = CAClockSetProperty(mtcClockRef, kCAClockProperty_SyncMode, size, &tSyncMode);
+        err = CAClockAddListener(mtcClockRef, clockListenerProc, (__bridge void *)(self));
+        if (err != noErr)
+            NSLog(@"\t\terr %d adding listener in %s", (int)err, __func__);
+        else {
+            err = CAClockArm(mtcClockRef);
+            if (err != noErr)
+                NSLog(@"\t\ter %d arming clock in %s", (int)err, __func__);
+
+        }
+    }
+     CAClockStart(mtcClockRef);
+}
+-(void)playMusic{
+
+   __block MIDIObjectRef endpointRef;
+    //Clavinova
+	NSMutableSet *devicelessDestinations = [NSMutableSet setWithArray:self.midiDeviceManager.virtualDestinations];
+    [devicelessDestinations enumerateObjectsUsingBlock:^(MIKMIDIDestinationEndpoint *ep, BOOL *stop) {
+        NSLog(@"endpoint:%u name:%@",  (unsigned int)ep.objectRef,ep.name);
+        if ([ep.name isEqualToString:@"Clavinova"]) { //IAC Bus 1
+            endpointRef = ep.objectRef;
+        }
+    }];
+    for(int i =0; i<10; i++){
+        [NSThread sleepForTimeInterval:.1]; // simulate a lag
+        NSString *midiFilePath = [[NSBundle mainBundle] pathForResource:@"1" ofType:@"mid"];
+        NSURL * midiFileURL = [NSURL fileURLWithPath:midiFilePath];
+        
+        MusicPlayer musicPlayer;
+        MusicSequence musicSequence;
+        NewMusicPlayer(&musicPlayer);
+        
+        if (NewMusicSequence(&musicSequence) != noErr)
+        {
+            [NSException raise:@"play" format:@"Can't create MusicSequence"];
+        }
+        
+        if(MusicSequenceFileLoad(musicSequence, (__bridge CFURLRef)midiFileURL, 0, 0 != noErr))
+        {
+            [NSException raise:@"play" format:@"Can't load MusicSequence"];
+        }
+        
+        MusicPlayerSetSequence(musicPlayer, musicSequence);
+       
+        MusicSequenceSetMIDIEndpoint(musicSequence,endpointRef);
+        OSStatus err = CAClockSetProperty(mtcClockRef, kCAClockProperty_SyncSource, sizeof(endpointRef), endpointRef);
+        MusicPlayerPreroll(musicPlayer);
+        MusicPlayerStart(musicPlayer);
+    }
+
+    
+        // Set the endpoint of the sequence to be our virtual endpoint
+     //   MusicSequenceSetMIDIEndpoint(sequence, virtualEndpoint);
+    
+}
+    
 
 - (void)applicationWillTerminate:(NSNotification *)notification
 {
@@ -250,5 +332,42 @@
     }
     [self sendSysex:sender];
 }
+
+    
+    
+    void clockListenerProc(void *userData, CAClockMessage msg, const void *param) {
+
+        NSLog(@"%s",__func__);
+        switch (msg) {
+            case kCAClockMessage_StartTimeSet:
+                NSLog(@"\t\tclock start time set");
+                break;
+                
+            case kCAClockMessage_Started:
+                NSLog(@"\t\tclock started");
+                break;
+                
+            case kCAClockMessage_Stopped:
+                NSLog(@"\t\tclock stopped");
+                break;
+                
+            case kCAClockMessage_Armed:
+                NSLog(@"\t\tclock armed");
+                break;
+                
+            case kCAClockMessage_Disarmed:
+                NSLog(@"\t\tclock disarmed");
+                break;
+                
+            case kCAClockMessage_PropertyChanged:
+                NSLog(@"\t\tclock property changed");
+                break;
+                
+            case kCAClockMessage_WrongSMPTEFormat:
+                NSLog(@"\t\tclock wrong SMPTE format");
+                break;
+        }
+
+    }
 
 @end
